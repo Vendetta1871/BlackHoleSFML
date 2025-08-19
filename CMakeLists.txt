@@ -11,6 +11,13 @@ find_package(OpenGL REQUIRED)
 
 set(SOURCES
         main.cpp
+        Camera.cpp
+        Camera.h
+        BlackHole.cpp
+        BlackHole.h
+        ObjectData.h
+        Engine.cpp
+        Engine.h
 )
 
 add_executable(BlackHoleSFML ${SOURCES})
