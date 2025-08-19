@@ -32,8 +32,34 @@ Engine::Engine() {
     glEnable(GL_DEPTH_TEST);
     glClearDepth(1.0);
 
-    shaderProgram = CreateShaderProgram();                 // quad blit
-    gridShaderProgram = CreateShaderProgram("shaders/grid.vert", "shaders/grid.frag");
+    if (!gridShader.loadFromFile("shaders/grid.vert", "shaders/grid.frag")) {
+        std::cerr << "Failed to load grid shaders" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    const std::string vsSrc = R"(
+        #version 330 core
+        layout (location = 0) in vec2 aPos;
+        layout (location = 1) in vec2 aTexCoord;
+        out vec2 TexCoord;
+        void main() {
+            gl_Position = vec4(aPos, 0.0, 1.0);
+            TexCoord = aTexCoord;
+        }
+    )";
+    const std::string fsSrc = R"(
+        #version 330 core
+        in vec2 TexCoord;
+        uniform sampler2D screenTexture;
+        out vec4 FragColor;
+        void main() {
+            FragColor = texture(screenTexture, TexCoord);
+        }
+    )";
+    if (!blitShader.loadFromMemory(vsSrc, fsSrc)) {
+        std::cerr << "Failed to load blit shader from memory" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
     computeProgram = CreateComputeProgram("shaders/geodesic.comp");
 
     glGenBuffers(1, &cameraUBO);
@@ -78,8 +104,8 @@ void Engine::generateGrid(const std::vector<ObjectData>& objs) {
 
     for (int z = 0; z <= gridSize; ++z) {
         for (int x = 0; x <= gridSize; ++x) {
-            float worldX = (float)(x - gridSize / 2) * spacing;
-            float worldZ = (float)(z - gridSize / 2) * spacing;
+            float worldX = ((float)x - (float)gridSize / 2.f) * spacing;
+            float worldZ = ((float)z - (float)gridSize / 2.f) * spacing;
 
             float y = 0.0f;
             for (const auto& obj : objs) {
@@ -126,121 +152,46 @@ void Engine::generateGrid(const std::vector<ObjectData>& objs) {
     glBindVertexArray(0);
 }
 
-
 void Engine::drawGrid(const glm::mat4& viewProj) {
-    glUseProgram(gridShaderProgram);
-    glUniformMatrix4fv(glGetUniformLocation(gridShaderProgram, "viewProj"),
-                       1, GL_FALSE, glm::value_ptr(viewProj));
+    sf::Shader::bind(&gridShader);
+
+    gridShader.setUniform("viewProj", sf::Glsl::Mat4(glm::value_ptr(viewProj)));
 
     glBindVertexArray(gridVAO);
+
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glDrawElements(GL_LINES, gridIndexCount, GL_UNSIGNED_INT, 0);
+
     glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
+
+    sf::Shader::bind(nullptr);
 }
 
 void Engine::drawFullScreenQuad() {
-    glUseProgram(shaderProgram);
-    glBindVertexArray(quadVAO);
+    blitShader.setUniform("screenTexture", sf::Shader::CurrentTexture);
+
+    sf::Shader::bind(&blitShader);
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
-    glUniform1i(glGetUniformLocation(shaderProgram, "screenTexture"), 0);
 
     glDisable(GL_DEPTH_TEST);
+    glBindVertexArray(quadVAO);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 6);
+    glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
-}
 
-GLuint Engine::CreateShaderProgram() {
-    const char* vsSrc = R"(
-            #version 330 core
-            layout (location = 0) in vec2 aPos;
-            layout (location = 1) in vec2 aTexCoord;
-            out vec2 TexCoord;
-            void main(){
-                gl_Position = vec4(aPos, 0.0, 1.0);
-                TexCoord = aTexCoord;
-            }
-        )";
-    const char* fsSrc = R"(
-            #version 330 core
-            in vec2 TexCoord;
-            uniform sampler2D screenTexture;
-            out vec4 FragColor;
-            void main(){
-                FragColor = texture(screenTexture, TexCoord);
-            }
-        )";
-
-    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vs, 1, &vsSrc, nullptr);
-    glCompileShader(vs);
-    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fs, 1, &fsSrc, nullptr);
-    glCompileShader(fs);
-
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
-    glLinkProgram(prog);
-
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-    return prog;
-}
-
-GLuint Engine::CreateShaderProgram(const char* vertPath, const char* fragPath) {
-    auto loadShader = [](const char* path, GLenum type) -> GLuint {
-        std::ifstream in(path);
-        if (!in.is_open()) {
-            std::cerr << "Failed to open shader: " << path << "\n";
-            exit(EXIT_FAILURE);
-        }
-        std::stringstream ss; ss << in.rdbuf();
-        std::string srcStr = ss.str();
-        const char* src = srcStr.c_str();
-
-        GLuint sh = glCreateShader(type);
-        glShaderSource(sh, 1, &src, nullptr);
-        glCompileShader(sh);
-
-        GLint ok; glGetShaderiv(sh, GL_COMPILE_STATUS, &ok);
-        if (!ok) {
-            GLint len; glGetShaderiv(sh, GL_INFO_LOG_LENGTH, &len);
-            std::vector<char> log(len);
-            glGetShaderInfoLog(sh, len, nullptr, log.data());
-            std::cerr << "Shader compile error (" << path << "):\n" << log.data() << "\n";
-            exit(EXIT_FAILURE);
-        }
-        return sh;
-    };
-
-    GLuint vs = loadShader(vertPath, GL_VERTEX_SHADER);
-    GLuint fs = loadShader(fragPath, GL_FRAGMENT_SHADER);
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vs);
-    glAttachShader(prog, fs);
-    glLinkProgram(prog);
-
-    GLint ok; glGetProgramiv(prog, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        GLint len; glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &len);
-        std::vector<char> log(len);
-        glGetProgramInfoLog(prog, len, nullptr, log.data());
-        std::cerr << "Shader link error:\n" << log.data() << "\n";
-        exit(EXIT_FAILURE);
-    }
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-    return prog;
+    sf::Shader::bind(nullptr);
 }
 
 GLuint Engine::CreateComputeProgram(const char* path) {
     std::ifstream in(path);
     if (!in.is_open()) {
-        std::cerr << "Failed to open compute shader: " << path << "\n";
+        std::cerr << "Failed to open compute shader: " << path << std::endl;
         exit(EXIT_FAILURE);
     }
     std::stringstream ss; ss << in.rdbuf();
@@ -255,7 +206,7 @@ GLuint Engine::CreateComputeProgram(const char* path) {
         GLint len; glGetShaderiv(cs, GL_INFO_LOG_LENGTH, &len);
         std::vector<char> log(len);
         glGetShaderInfoLog(cs, len, nullptr, log.data());
-        std::cerr << "Compute shader compile error:\n" << log.data() << "\n";
+        std::cerr << "Compute shader compile error:\n" << log.data() << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -290,8 +241,8 @@ void Engine::dispatchCompute(const Camera& cam, const BlackHole& hole, const std
 
     glBindImageTexture(0, texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
-    auto groupsX = (GLuint)std::ceil(cw / 16.0f);
-    auto groupsY = (GLuint)std::ceil(ch / 16.0f);
+    auto groupsX = (GLuint)std::ceil((float)cw / 16.f);
+    auto groupsY = (GLuint)std::ceil((float)ch / 16.f);
     glDispatchCompute(groupsX, groupsY, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
@@ -317,7 +268,7 @@ void Engine::uploadCameraUBO(const Camera& cam) {
     data.right = right;
     data.up = up;
     data.forward = fwd;
-    data.tanHalfFov = tan(glm::radians(60.0f * 0.5f));
+    data.tanHalfFov = std::tan(glm::radians(60.0f * 0.5f));
     data.aspect = float(WIDTH) / float(HEIGHT);
     data.moving = (cam.dragging || cam.panning) ? 1 : 0;
 

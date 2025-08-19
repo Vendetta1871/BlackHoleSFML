@@ -59,12 +59,12 @@ Camera camera;
             }
             else if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
                 if (keyReleased->scancode == sf::Keyboard::Scancode::Equal) {
-                   // engine.COMPUTE_HEIGHT *= 2;
-                   // engine.COMPUTE_WIDTH *= 2;
+                   engine.COMPUTE_HEIGHT *= 2;
+                   engine.COMPUTE_WIDTH *= 2;
                 }
                 if (keyReleased->scancode == sf::Keyboard::Scancode::Hyphen) {
-                   // engine.COMPUTE_HEIGHT /= 2;
-                   // engine.COMPUTE_WIDTH /= 2;
+                   engine.COMPUTE_HEIGHT /= 2;
+                   engine.COMPUTE_WIDTH /= 2;
                 }
             }
         }
