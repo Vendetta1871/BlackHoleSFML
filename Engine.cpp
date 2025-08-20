@@ -207,6 +207,7 @@ void Engine::uploadCameraUBO(const Camera& cam) const {
         glm::vec3 up; float _pad2;
         glm::vec3 forward; float _pad3;
         float tanHalfFov;
+        int moving;
         float aspect;
         int   _pad4;
     } data{};
@@ -221,6 +222,7 @@ void Engine::uploadCameraUBO(const Camera& cam) const {
     data.up = up;
     data.forward = fwd;
     data.tanHalfFov = std::tan(glm::radians(60.0f * 0.5f));
+    data.moving = cam.moving ? 1 : 0;
     data.aspect = static_cast<float>(window->getSize().x) / static_cast<float>(window->getSize().y);
 
     glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);

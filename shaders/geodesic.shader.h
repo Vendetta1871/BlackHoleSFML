@@ -12,6 +12,7 @@ layout(std140, binding = 1) uniform Camera {
     vec3 camUp;      float _pad2;
     vec3 camForward; float _pad3;
     float tanHalfFov;
+    bool moving;
     float aspect;
     int   _pad4;
 } cam;
@@ -141,7 +142,7 @@ void main() {
     bool hitDisk      = false;
     bool hitObject    = false;
 
-    int steps = 60000;
+    int steps = cam.moving ? 44000 : 60000;
     for (int i = 0; i < steps; ++i) {
         if (intercept(ray, SagA_rs)) { hitBlackHole = true; break; }
         rk4Step(ray, D_LAMBDA);
