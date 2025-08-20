@@ -1,7 +1,6 @@
 #ifndef BLACKHOLESFML_ENGINE_H
 #define BLACKHOLESFML_ENGINE_H
 #include <GL/glew.h>
-#include <glm/fwd.hpp>
 #include <SFML/Window/Window.hpp>
 #include <SFML/Graphics/Shader.hpp>
 
@@ -16,16 +15,13 @@ public:
     // Window / context via SFML
     sf::Window* window = nullptr;
 
-    unsigned int WIDTH = 800;
-    unsigned int HEIGHT = 600;
-    int COMPUTE_WIDTH  = 200;
-    int COMPUTE_HEIGHT = 150;
+    sf::Vector2u computeSize{200, 150};
 
-    Engine();
+    explicit Engine(const sf::Vector2u& initialSize);
     ~Engine();
 
     void generateGrid(const std::vector<ObjectData>& objs);
-    void drawGrid(const glm::mat4& viewProj);
+    void drawGrid(const Camera& camera);
 
     void drawFullScreenQuad();
 
@@ -49,13 +45,14 @@ private:
     float width = 1e11f;
     float height = 7.5e10f;
 
-    GLuint CreateComputeProgram(const char* path);
+    static GLuint CreateComputeProgram(const char* path);
 
-    void uploadCameraUBO(const Camera& cam);
-    void uploadObjectsUBO(const std::vector<ObjectData>& objs);
-    void uploadDiskUBO(const BlackHole& hole);
+    void uploadCameraUBO(const Camera& cam) const;
+    void uploadObjectsUBO(const std::vector<ObjectData>& objs) const;
+    void uploadDiskUBO(const BlackHole& hole) const;
 
-    std::vector<GLuint> QuadVAO();
+    void genQuadVAO();
+    void genBuffers();
 };
 
 #endif //BLACKHOLESFML_ENGINE_H

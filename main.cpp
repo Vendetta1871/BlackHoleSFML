@@ -6,45 +6,36 @@
 #include <SFML/System.hpp>
 
 // ---- GLM
-#include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 // ---- STL
+#include <iostream>
 #include <vector>
-#include <chrono>
 
 #include "Camera.h"
 #include "BlackHole.h"
 #include "Engine.h"
 #include "ObjectData.h"
 
-using Clock = std::chrono::high_resolution_clock;
-
 int main() {
 Camera camera;
-    BlackHole SagA(glm::vec3(0.0f, 0.0f, 0.0f), 8.54e36); // Sagittarius A
-    std::vector<ObjectData> objects = {
+    const BlackHole SagA(glm::vec3(0.0f, 0.0f, 0.0f), 8.54e36); // Sagittarius A
+    const std::vector<ObjectData> objects = {
         { glm::vec4(4e11f, 0.0f, 0.0f, 4e10f)   , glm::vec4(1,1,0,1), 1.98892e30f },
         { glm::vec4(0.0f, 0.0f, 4e11f, 4e10f)   , glm::vec4(1,0,0,1), 1.98892e30f },
         { glm::vec4(0.0f, 0.0f, 0.0f, (float)SagA.r_s) , glm::vec4(0,0,0,1), (float)SagA.mass  },
     };
-    Engine engine;
+    Engine engine{{800, 600}};
 
-    double lastTime = 0.0;
+    sf::Clock sfClock;
+    int framecount = 0;
     while (engine.window->isOpen()) {
-        sf::Clock sfClock;
-        while (const std::optional event = engine.window->pollEvent())
-        {
-            if (event->is<sf::Event::Closed>())
-            {
+        camera.scrolling = false; // need to reset cuz there is no way to know if scroll stopped
+        while (const std::optional event = engine.window->pollEvent()) {
+            if (event->is<sf::Event::Closed>()) {
                 engine.window->close();
-            }
-            else if (const auto* resized = event->getIf<sf::Event::Resized>()) {
-                engine.WIDTH  = (int)resized->size.x;
-                engine.HEIGHT = (int)resized->size.y;
-                glViewport(0, 0, (int)engine.WIDTH, (int)engine.HEIGHT);
-            }else if (const auto* moved = event->getIf<sf::Event::MouseMoved>()) {
+            } else if (const auto* moved = event->getIf<sf::Event::MouseMoved>()) {
                 camera.processMouseMove(moved->position.x, moved->position.y);
             } else if (const auto* pressed = event->getIf<sf::Event::MouseButtonPressed>()) {
                 camera.processMouseButton(pressed->button, true, *engine.window);
@@ -52,28 +43,29 @@ Camera camera;
                 camera.processMouseButton(released->button, false, *engine.window);
             } else if (const auto* scrolled = event->getIf<sf::Event::MouseWheelScrolled>()) {
                 camera.processScroll(0.0, scrolled->delta);
-            }
-            else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>())
-            {
+            } else if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
                 camera.processKey(keyPressed->scancode, true);
-            }
-            else if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
-                if (keyReleased->scancode == sf::Keyboard::Scancode::Equal) {
-                   engine.COMPUTE_HEIGHT *= 2;
-                   engine.COMPUTE_WIDTH *= 2;
-                }
-                if (keyReleased->scancode == sf::Keyboard::Scancode::Hyphen) {
-                   engine.COMPUTE_HEIGHT /= 2;
-                   engine.COMPUTE_WIDTH /= 2;
-                }
+            } else if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
+                if (keyReleased->scancode == sf::Keyboard::Scancode::Equal)
+                   engine.computeSize *= 2u;
+                if (keyReleased->scancode == sf::Keyboard::Scancode::Hyphen)
+                   engine.computeSize /= 2u;
             }
         }
+        camera.update();
 
         // --- Timing ---
-        double now = sfClock.getElapsedTime().asSeconds();
-        double dt = now - lastTime;
-        lastTime = now;
-        (void)dt; // if not used further
+        const float dt = sfClock.restart().asSeconds();
+        framecount++;
+        if (camera.moving) {
+            const float scale = (1.f + 1.f / 60.f / dt) / 2.f;
+            const auto x = (uint32_t)((float)engine.computeSize.x * scale);
+            const auto y = (uint32_t)((float)engine.computeSize.y * scale);
+            engine.computeSize.x = std::max(x, engine.window->getSize().x / 32u);
+            engine.computeSize.y = std::max(y, engine.window->getSize().y / 32u);
+        } else if (dt < 1.f / 5.f) {
+            engine.computeSize = engine.computeSize * 8u / 7u;
+        }
 
         // --- Clear ---
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -81,14 +73,10 @@ Camera camera;
 
         // --- Grid ---
         engine.generateGrid(objects);
-        glm::mat4 view = lookAt(camera.position(), camera.target, glm::vec3(0,1,0));
-        glm::mat4 proj = glm::perspective(glm::radians(60.0f),
-            float(engine.WIDTH)/float(engine.HEIGHT), 1e9f, 1e14f);
-        glm::mat4 viewProj = proj * view;
-        engine.drawGrid(viewProj);
+        engine.drawGrid(camera);
 
         // --- Compute Raytracer -> Texture ---
-        glViewport(0, 0, (int)engine.WIDTH, (int)engine.HEIGHT);
+        glViewport(0, 0, (int)engine.window->getSize().x, (int)engine.window->getSize().y);
         engine.dispatchCompute(camera, SagA, objects);
         engine.drawFullScreenQuad();
 

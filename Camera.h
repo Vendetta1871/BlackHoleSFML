@@ -10,6 +10,7 @@ public:
 
     bool dragging = false;
     bool panning = false;
+    bool scrolling = false;
     bool moving = false;
 
     Camera() = default;
@@ -23,6 +24,8 @@ public:
     void processScroll(double /*xoffset*/, double yoffset);
 
     void processKey(sf::Keyboard::Scancode key, bool pressed);
+
+    void update();
 
 private:
     float radius = 6.34194e10f;
@@ -38,8 +41,6 @@ private:
 
     double lastX = 0.f;
     double lastY = 0.f;
-
-    void update();
 };
 
 #endif //BLACKHOLESFML_CAMERA_H

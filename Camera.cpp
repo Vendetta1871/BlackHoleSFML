@@ -13,7 +13,7 @@ glm::vec3 Camera::position() const {
 
 void Camera::update() {
     target = glm::vec3(0.0f, 0.0f, 0.0f);
-    moving = (dragging | panning);
+    moving = (dragging | panning | scrolling);
 }
 
 void Camera::processMouseMove(double x, double y) {
@@ -28,7 +28,6 @@ void Camera::processMouseMove(double x, double y) {
         elevation = glm::clamp(elevation, 0.01f, float(M_PI) - 0.01f);
     }
     lastX = x; lastY = y;
-    update();
 }
 
 void Camera::processMouseButton(sf::Mouse::Button button, bool pressed, const sf::Window& win) {
@@ -43,13 +42,12 @@ void Camera::processMouseButton(sf::Mouse::Button button, bool pressed, const sf
             panning = false;
         }
     }
-    update();
 }
 
 void Camera::processScroll(double /*xoffset*/, double yoffset) {
     radius -= yoffset * zoomSpeed;
     radius = glm::clamp(radius, minRadius, maxRadius);
-    update();
+    scrolling = true;
 }
 
 void Camera::processKey(sf::Keyboard::Scancode key, bool pressed) { }

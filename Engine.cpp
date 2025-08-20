@@ -5,7 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 
-Engine::Engine() {
+Engine::Engine(const sf::Vector2u& initialSize) {
     // Request core 4.3 context for compute shaders
     sf::ContextSettings settings;
     settings.depthBits = 24;
@@ -14,7 +14,7 @@ Engine::Engine() {
     settings.minorVersion = 3;
     settings.attributeFlags = sf::ContextSettings::Core;
 
-    window = new sf::RenderWindow(sf::VideoMode({WIDTH, HEIGHT}), "Black Hole (SFML + OpenGL)");
+    window = new sf::RenderWindow(sf::VideoMode(initialSize), "Black Hole (SFML + OpenGL)");
     window->setVerticalSyncEnabled(true);
     //window->setActive(true);
 
@@ -37,65 +37,33 @@ Engine::Engine() {
         std::exit(EXIT_FAILURE);
     }
 
-    const std::string vsSrc = R"(
-        #version 330 core
-        layout (location = 0) in vec2 aPos;
-        layout (location = 1) in vec2 aTexCoord;
-        out vec2 TexCoord;
-        void main() {
-            gl_Position = vec4(aPos, 0.0, 1.0);
-            TexCoord = aTexCoord;
-        }
-    )";
-    const std::string fsSrc = R"(
-        #version 330 core
-        in vec2 TexCoord;
-        uniform sampler2D screenTexture;
-        out vec4 FragColor;
-        void main() {
-            FragColor = texture(screenTexture, TexCoord);
-        }
-    )";
-    if (!blitShader.loadFromMemory(vsSrc, fsSrc)) {
-        std::cerr << "Failed to load blit shader from memory" << std::endl;
+    if (!blitShader.loadFromFile("shaders/blit.vert", "shaders/blit.fraq")) {
+        std::cerr << "Failed to load blit shaders" << std::endl;
         std::exit(EXIT_FAILURE);
     }
     computeProgram = CreateComputeProgram("shaders/geodesic.comp");
 
-    glGenBuffers(1, &cameraUBO);
-    glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
-    glBufferData(GL_UNIFORM_BUFFER, 128, nullptr, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 1, cameraUBO);
+    genBuffers();
+    genQuadVAO();
 
-    glGenBuffers(1, &diskUBO);
-    glBindBuffer(GL_UNIFORM_BUFFER, diskUBO);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(float) * 4, nullptr, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 2, diskUBO);
-
-    glGenBuffers(1, &objectsUBO);
-    glBindBuffer(GL_UNIFORM_BUFFER, objectsUBO);
-    GLsizeiptr objUBOSize = sizeof(int) + 3*sizeof(float)
-        + 16*(sizeof(glm::vec4) + sizeof(glm::vec4))
-        + 16*sizeof(float);
-    glBufferData(GL_UNIFORM_BUFFER, objUBOSize, nullptr, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 3, objectsUBO);
-
-    auto result = QuadVAO();
-    quadVAO = result[0];
-    texture = result[1];
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, computeSize.x, computeSize.y, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 }
 
 Engine::~Engine() {
     if (!window) return;
-    window->setActive(false);
+    //window->setActive(false);
     window->close();
     delete window;
     window = nullptr;
 }
 
 void Engine::generateGrid(const std::vector<ObjectData>& objs) {
-    const int gridSize = 25;
-    const float spacing = 1e10f;
+    constexpr int gridSize = 25;
     constexpr double c = 299792458.0;
     constexpr double G = 6.67430e-11;
 
@@ -104,23 +72,23 @@ void Engine::generateGrid(const std::vector<ObjectData>& objs) {
 
     for (int z = 0; z <= gridSize; ++z) {
         for (int x = 0; x <= gridSize; ++x) {
+            constexpr float spacing = 1e10f;
             float worldX = ((float)x - (float)gridSize / 2.f) * spacing;
             float worldZ = ((float)z - (float)gridSize / 2.f) * spacing;
 
             float y = 0.0f;
             for (const auto& obj : objs) {
-                auto objPos = glm::vec3(obj.posRadius);
-                double mass = obj.mass;
-                double r_s = 2.0 * G * mass / (c * c);
-                double dx = worldX - objPos.x;
-                double dz = worldZ - objPos.z;
-                double dist = sqrt(dx*dx + dz*dz);
+                const auto objPos = glm::vec3(obj.posRadius);
+                const double mass = obj.mass;
+                const double r_s = 2.0 * G * mass / (c * c);
+                const double dx = worldX - objPos.x;
+                const double dz = worldZ - objPos.z;
 
-                if (dist > r_s) {
-                    double deltaY = 2.0 * sqrt(r_s * (dist - r_s));
+                if (const double dist = std::sqrt(dx*dx + dz*dz); dist > r_s) {
+                    const double deltaY = 2.0 * std::sqrt(r_s * (dist - r_s));
                     y += static_cast<float>(deltaY) - 3e10f;
                 } else {
-                    y += 2.0f * static_cast<float>(sqrt(r_s * r_s)) - 3e10f;
+                    y += 2.0f * static_cast<float>(std::sqrt(r_s * r_s)) - 3e10f;
                 }
             }
             vertices.emplace_back(worldX, y, worldZ);
@@ -129,7 +97,7 @@ void Engine::generateGrid(const std::vector<ObjectData>& objs) {
 
     for (int z = 0; z < gridSize; ++z) {
         for (int x = 0; x < gridSize; ++x) {
-            int i = z * (gridSize + 1) + x;
+            const int i = z * (gridSize + 1) + x;
             indices.push_back(i); indices.push_back(i + 1);
             indices.push_back(i); indices.push_back(i + gridSize + 1);
         }
@@ -146,13 +114,18 @@ void Engine::generateGrid(const std::vector<ObjectData>& objs) {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)nullptr);
 
     gridIndexCount = (int)indices.size();
     glBindVertexArray(0);
 }
 
-void Engine::drawGrid(const glm::mat4& viewProj) {
+void Engine::drawGrid(const Camera& camera) {
+    glm::mat4 view = lookAt(camera.position(), camera.target, glm::vec3(0,1,0));
+    glm::mat4 proj = glm::perspective(glm::radians(60.0f),
+        float(window->getSize().x)/float(window->getSize().y), 1e9f, 1e14f);
+    glm::mat4 viewProj = proj * view;
+
     sf::Shader::bind(&gridShader);
 
     gridShader.setUniform("viewProj", sf::Glsl::Mat4(glm::value_ptr(viewProj)));
@@ -163,7 +136,7 @@ void Engine::drawGrid(const glm::mat4& viewProj) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glDrawElements(GL_LINES, gridIndexCount, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_LINES, gridIndexCount, GL_UNSIGNED_INT, nullptr);
 
     glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
@@ -226,28 +199,25 @@ GLuint Engine::CreateComputeProgram(const char* path) {
 }
 
 void Engine::dispatchCompute(const Camera& cam, const BlackHole& hole, const std::vector<ObjectData>& objs) {
-    //int cw = cam.moving ? COMPUTE_WIDTH  : 200;
-    //int ch = cam.moving ? COMPUTE_HEIGHT : 150;
-    int cw = COMPUTE_WIDTH;
-    int ch = COMPUTE_HEIGHT;
-
     glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, cw, ch, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, computeSize.x, computeSize.y,
+        0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
     glUseProgram(computeProgram);
     uploadCameraUBO(cam);
     uploadDiskUBO(hole);
     uploadObjectsUBO(objs);
+    glUniform2i(glGetUniformLocation(computeProgram, "texSize"), computeSize.x, computeSize.y);
 
     glBindImageTexture(0, texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
 
-    auto groupsX = (GLuint)std::ceil((float)cw / 16.f);
-    auto groupsY = (GLuint)std::ceil((float)ch / 16.f);
+    const auto groupsX = (GLuint)std::ceil((float)computeSize.x / 16.f);
+    const auto groupsY = (GLuint)std::ceil((float)computeSize.y / 16.f);
     glDispatchCompute(groupsX, groupsY, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
 
-void Engine::uploadCameraUBO(const Camera& cam) {
+void Engine::uploadCameraUBO(const Camera& cam) const {
     struct UBOData {
         glm::vec3 pos; float _pad0;
         glm::vec3 right; float _pad1;
@@ -255,7 +225,6 @@ void Engine::uploadCameraUBO(const Camera& cam) {
         glm::vec3 forward; float _pad3;
         float tanHalfFov;
         float aspect;
-        int   moving;
         int   _pad4;
     } data{};
 
@@ -269,14 +238,13 @@ void Engine::uploadCameraUBO(const Camera& cam) {
     data.up = up;
     data.forward = fwd;
     data.tanHalfFov = std::tan(glm::radians(60.0f * 0.5f));
-    data.aspect = float(WIDTH) / float(HEIGHT);
-    data.moving = (cam.dragging || cam.panning) ? 1 : 0;
+    data.aspect = static_cast<float>(window->getSize().x) / static_cast<float>(window->getSize().y);
 
     glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(UBOData), &data);
 }
 
-void Engine::uploadObjectsUBO(const std::vector<ObjectData>& objs) {
+void Engine::uploadObjectsUBO(const std::vector<ObjectData>& objs) const {
     struct UBOData {
         int   numObjects;
         float _pad0, _pad1, _pad2;
@@ -297,7 +265,7 @@ void Engine::uploadObjectsUBO(const std::vector<ObjectData>& objs) {
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(data), &data);
 }
 
-void Engine::uploadDiskUBO(const BlackHole& hole) {
+void Engine::uploadDiskUBO(const BlackHole& hole) const {
     float r1 = float(hole.r_s) * 2.2f;
     float r2 = float(hole.r_s) * 5.2f;
     float num = 2.0f;
@@ -308,9 +276,9 @@ void Engine::uploadDiskUBO(const BlackHole& hole) {
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(diskData), diskData);
 }
 
-std::vector<GLuint> Engine::QuadVAO() {
-    float quadVertices[] = {
-        // pos      // uv
+void Engine::genQuadVAO() {
+    constexpr float quadVertices[] = {
+        // pos         // uv
         -1.0f,  1.0f,  0.0f, 1.0f,
         -1.0f, -1.0f,  0.0f, 0.0f,
          1.0f, -1.0f,  1.0f, 0.0f,
@@ -319,26 +287,36 @@ std::vector<GLuint> Engine::QuadVAO() {
          1.0f, -1.0f,  1.0f, 0.0f,
          1.0f,  1.0f,  1.0f, 1.0f
     };
-    GLuint VAO, VBO;
-    glGenVertexArrays(1, &VAO);
+    GLuint VBO;
+    glGenVertexArrays(1, &quadVAO);
     glGenBuffers(1, &VBO);
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(quadVAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)nullptr);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4*sizeof(float), (void*)(2*sizeof(float)));
     glEnableVertexAttribArray(1);
+}
 
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, COMPUTE_WIDTH, COMPUTE_HEIGHT, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+void Engine::genBuffers() {
+    glGenBuffers(1, &cameraUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
+    glBufferData(GL_UNIFORM_BUFFER, 128, nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, cameraUBO);
 
-    return { VAO, tex };
+    glGenBuffers(1, &diskUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, diskUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(float) * 4, nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 2, diskUBO);
+
+    glGenBuffers(1, &objectsUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, objectsUBO);
+    constexpr GLsizeiptr objUBOSize = sizeof(int) + 3*sizeof(float)
+                                      + 16*(sizeof(glm::vec4) + sizeof(glm::vec4))
+                                      + 16*sizeof(float);
+    glBufferData(GL_UNIFORM_BUFFER, objUBOSize, nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, objectsUBO);
 }
