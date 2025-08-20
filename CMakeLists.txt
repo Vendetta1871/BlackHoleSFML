@@ -18,6 +18,9 @@ set(SOURCES
         ObjectData.h
         Engine.cpp
         Engine.h
+        shaders/blit.shader.h
+        shaders/grid.shader.h
+        shaders/geodesic.shader.h
 )
 
 add_executable(BlackHoleSFML ${SOURCES})
@@ -31,9 +34,3 @@ target_link_libraries(BlackHoleSFML
         glm::glm
         OpenGL::GL
 )
-
-add_custom_command(TARGET BlackHoleSFML POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/shaders
-        $<TARGET_FILE_DIR:BlackHoleSFML>/shaders)
-

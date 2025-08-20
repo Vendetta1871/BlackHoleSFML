@@ -3,7 +3,7 @@
 #include <glm/common.hpp>
 
 glm::vec3 Camera::position() const {
-    float clampedElevation = glm::clamp(elevation, 0.01f, float(M_PI) - 0.01f);
+    const float clampedElevation = glm::clamp(elevation, 0.01f, float(M_PI) - 0.01f);
     return {
         radius * std::sin(clampedElevation) * std::cos(azimuth),
         radius * std::cos(clampedElevation),
@@ -13,16 +13,14 @@ glm::vec3 Camera::position() const {
 
 void Camera::update() {
     target = glm::vec3(0.0f, 0.0f, 0.0f);
-    moving = (dragging | panning | scrolling);
+    moving = (dragging | resizing | scrolling);
 }
 
-void Camera::processMouseMove(double x, double y) {
-    auto dx = static_cast<float>(x - lastX);
-    auto dy = static_cast<float>(y - lastY);
+void Camera::processMouseMove(float x, float y) {
+    float dx = x - lastX;
+    float dy = y - lastY;
 
-    if (dragging && panning) {
-        // camera is always around the center
-    } else if (dragging && !panning) {
+    if (dragging) {
         azimuth   += dx * orbitSpeed;
         elevation -= dy * orbitSpeed;
         elevation = glm::clamp(elevation, 0.01f, float(M_PI) - 0.01f);
@@ -34,17 +32,16 @@ void Camera::processMouseButton(sf::Mouse::Button button, bool pressed, const sf
     if (button == sf::Mouse::Button::Left || button == sf::Mouse::Button::Middle) {
         if (pressed) {
             dragging = true;
-            panning = false; // keep center on a black hole
             auto p = sf::Mouse::getPosition(win);
-            lastX = p.x; lastY = p.y;
+            lastX = (float)p.x;
+            lastY = (float)p.y;
         } else {
             dragging = false;
-            panning = false;
         }
     }
 }
 
-void Camera::processScroll(double /*xoffset*/, double yoffset) {
+void Camera::processScroll(float /*xoffset*/, float yoffset) {
     radius -= yoffset * zoomSpeed;
     radius = glm::clamp(radius, minRadius, maxRadius);
     scrolling = true;

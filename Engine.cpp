@@ -1,4 +1,7 @@
 #include "Engine.h"
+#include "shaders/blit.shader.h"
+#include "shaders/grid.shader.h"
+#include "shaders/geodesic.shader.h"
 
 #include <fstream>
 #include <iostream>
@@ -6,22 +9,12 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 
 Engine::Engine(const sf::Vector2u& initialSize) {
-    // Request core 4.3 context for compute shaders
-    sf::ContextSettings settings;
-    settings.depthBits = 24;
-    settings.stencilBits = 8;
-    settings.majorVersion = 4;
-    settings.minorVersion = 3;
-    settings.attributeFlags = sf::ContextSettings::Core;
-
     window = new sf::RenderWindow(sf::VideoMode(initialSize), "Black Hole (SFML + OpenGL)");
     window->setVerticalSyncEnabled(true);
-    //window->setActive(true);
 
     // init GLEW after context is active
     glewExperimental = GL_TRUE;
-    GLenum glewErr = glewInit();
-    if (glewErr != GLEW_OK) {
+    if (const GLenum glewErr = glewInit(); glewErr != GLEW_OK) {
         std::cerr << "Failed to initialize GLEW: " << (const char*)glewGetErrorString(glewErr) << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -32,16 +25,16 @@ Engine::Engine(const sf::Vector2u& initialSize) {
     glEnable(GL_DEPTH_TEST);
     glClearDepth(1.0);
 
-    if (!gridShader.loadFromFile("shaders/grid.vert", "shaders/grid.frag")) {
+    if (!gridShader.loadFromMemory(gridVert, gridFraq)) {
         std::cerr << "Failed to load grid shaders" << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
-    if (!blitShader.loadFromFile("shaders/blit.vert", "shaders/blit.fraq")) {
+    if (!blitShader.loadFromMemory(blitVert, blitFraq)) {
         std::cerr << "Failed to load blit shaders" << std::endl;
         std::exit(EXIT_FAILURE);
     }
-    computeProgram = CreateComputeProgram("shaders/geodesic.comp");
+    computeProgram = CreateComputeProgram(geodesicComp);
 
     genBuffers();
     genQuadVAO();
@@ -56,7 +49,6 @@ Engine::Engine(const sf::Vector2u& initialSize) {
 
 Engine::~Engine() {
     if (!window) return;
-    //window->setActive(false);
     window->close();
     delete window;
     window = nullptr;
@@ -161,17 +153,8 @@ void Engine::drawFullScreenQuad() {
     sf::Shader::bind(nullptr);
 }
 
-GLuint Engine::CreateComputeProgram(const char* path) {
-    std::ifstream in(path);
-    if (!in.is_open()) {
-        std::cerr << "Failed to open compute shader: " << path << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    std::stringstream ss; ss << in.rdbuf();
-    std::string srcStr = ss.str();
-    const char* src = srcStr.c_str();
-
-    GLuint cs = glCreateShader(GL_COMPUTE_SHADER);
+GLuint Engine::CreateComputeProgram(const char* src) {
+    const GLuint cs = glCreateShader(GL_COMPUTE_SHADER);
     glShaderSource(cs, 1, &src, nullptr);
     glCompileShader(cs);
     GLint ok; glGetShaderiv(cs, GL_COMPILE_STATUS, &ok);
@@ -283,9 +266,9 @@ void Engine::genQuadVAO() {
         -1.0f, -1.0f,  0.0f, 0.0f,
          1.0f, -1.0f,  1.0f, 0.0f,
 
+        1.0f, -1.0f,  1.0f, 0.0f,
+        1.0f,  1.0f,  1.0f, 1.0f,
         -1.0f,  1.0f,  0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f, 0.0f,
-         1.0f,  1.0f,  1.0f, 1.0f
     };
     GLuint VBO;
     glGenVertexArrays(1, &quadVAO);

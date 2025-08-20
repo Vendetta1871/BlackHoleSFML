@@ -9,7 +9,7 @@ public:
     glm::vec3 target{0.f, 0.f, 0.f};
 
     bool dragging = false;
-    bool panning = false;
+    bool resizing = false;
     bool scrolling = false;
     bool moving = false;
 
@@ -17,11 +17,11 @@ public:
 
     [[nodiscard]] glm::vec3 position() const;
 
-    void processMouseMove(double x, double y);
+    void processMouseMove(float x, float y);
 
     void processMouseButton(sf::Mouse::Button button, bool pressed, const sf::Window& win);
 
-    void processScroll(double /*xoffset*/, double yoffset);
+    void processScroll(float /*xoffset*/, float yoffset);
 
     void processKey(sf::Keyboard::Scancode key, bool pressed);
 
@@ -37,10 +37,10 @@ private:
 
     float orbitSpeed = 0.01f;
     float panSpeed = 0.01f;
-    double zoomSpeed = 25e9f;
+    float zoomSpeed = 25e9f;
 
-    double lastX = 0.f;
-    double lastY = 0.f;
+    float lastX = 0.f;
+    float lastY = 0.f;
 };
 
 #endif //BLACKHOLESFML_CAMERA_H

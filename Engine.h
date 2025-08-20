@@ -1,10 +1,10 @@
 #ifndef BLACKHOLESFML_ENGINE_H
 #define BLACKHOLESFML_ENGINE_H
-#include <GL/glew.h>
-#include <SFML/Window/Window.hpp>
-#include <SFML/Graphics/Shader.hpp>
-
 #include <vector>
+
+#include <GL/glew.h>
+#include <SFML/Graphics/Shader.hpp>
+#include <SFML/Graphics/RenderWindow.hpp>
 
 #include "BlackHole.h"
 #include "Camera.h"
@@ -13,7 +13,8 @@
 class Engine {
 public:
     // Window / context via SFML
-    sf::Window* window = nullptr;
+    sf::RenderWindow* window = nullptr;
+    bool isTextureReady = false;
 
     sf::Vector2u computeSize{200, 150};
 
@@ -45,7 +46,7 @@ private:
     float width = 1e11f;
     float height = 7.5e10f;
 
-    static GLuint CreateComputeProgram(const char* path);
+    static GLuint CreateComputeProgram(const char* src);
 
     void uploadCameraUBO(const Camera& cam) const;
     void uploadObjectsUBO(const std::vector<ObjectData>& objs) const;

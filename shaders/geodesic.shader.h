@@ -1,3 +1,7 @@
+#ifndef BLACKHOLESFML_GEODESIC_SHADER_H
+#define BLACKHOLESFML_GEODESIC_SHADER_H
+
+inline auto geodesicComp = R"(
 #version 430
 layout(local_size_x = 16, local_size_y = 16) in;
 
@@ -23,7 +27,7 @@ layout(std140, binding = 3) uniform Objects {
     int numObjects;
     vec4 objPosRadius[16];
     vec4 objColor[16];
-    float  mass[16]; 
+    float  mass[16];
 };
 
 uniform ivec2 texSize;
@@ -155,10 +159,8 @@ void main() {
         vec3 diskColor = vec3(1.0, r, 0.2);
         //r = 1.0 - abs(r - 0.5) * 2.0;
         color = vec4(diskColor, r);
-
     } else if (hitBlackHole) {
         color = vec4(0.0, 0.0, 0.0, 1.0);
-
     } else if (hitObject) {
         // Compute shading
         vec3 P = vec3(ray.x, ray.y, ray.z);
@@ -169,10 +171,12 @@ void main() {
         float intensity = ambient + (1.0 - ambient) * diff;
         vec3 shaded = objectColor.rgb * intensity;
         color = vec4(shaded, objectColor.a);
-
     } else {
         color = vec4(0.0);
     }
 
     imageStore(outImage, pix, color);
 }
+)";
+
+#endif //BLACKHOLESFML_GEODESIC_SHADER_H
