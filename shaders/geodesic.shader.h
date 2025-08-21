@@ -142,7 +142,7 @@ void main() {
     bool hitDisk      = false;
     bool hitObject    = false;
 
-    int steps = cam.moving ? 44000 : 60000;
+    int steps = cam.moving ? 48000 : 60000;
     for (int i = 0; i < steps; ++i) {
         if (intercept(ray, SagA_rs)) { hitBlackHole = true; break; }
         rk4Step(ray, D_LAMBDA);

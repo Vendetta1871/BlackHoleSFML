@@ -137,7 +137,10 @@ void Engine::drawGrid(const Camera& camera) {
 }
 
 void Engine::drawFullScreenQuad() {
-    blitShader.setUniform("screenTexture", sf::Shader::CurrentTexture);
+    blitShader.setUniform("u_texture", sf::Shader::CurrentTexture);
+    blitShader.setUniform("u_textureSize", sf::Vector2f(computeSize));
+    blitShader.setUniform("u_sigma", 1.f);
+    blitShader.setUniform("u_sharpness", 0.4f);
 
     sf::Shader::bind(&blitShader);
 

@@ -43,12 +43,15 @@ int main() {
         const float dt = sfClock.restart().asSeconds();
         const sf::Vector2u size = engine.window->getSize();
         if (camera.moving) {
-            if (dt > 1.f / 24.f) {
+            if (engine.isTextureReady) {
+                engine.isTextureReady = false;
+                engine.computeSize.x = std::max(engine.computeSize.x * 1u / 2u, size.x / 32u);
+                engine.computeSize.y = std::max(engine.computeSize.y * 1u / 2u, size.y / 32u);
+            } else if (dt > 1.f / 24.f) {
                 engine.computeSize.x = std::max(engine.computeSize.x * 3u / 4u, size.x / 32u);
                 engine.computeSize.y = std::max(engine.computeSize.y * 3u / 4u, size.y / 32u);
             }
-            engine.isTextureReady = false;
-        } else if (dt < 1.f / 10.f && !engine.isTextureReady) {
+        } else if (dt < 1.f / 8.f && !engine.isTextureReady) {
             engine.computeSize.x = std::min(engine.computeSize.x * 4u / 3u, size.x);
             engine.computeSize.y = std::min(engine.computeSize.y * 4u / 3u, size.y);
         } else {
